@@ -1,9 +1,9 @@
 {
     "type": "package",
-    "name": "linsyking/elm-canvas",
-    "summary": "2D drawing API based on DOM Canvas, but nicer",
+    "name": "YUcuxo/elm-canvas",
+    "summary": "2D drawing API based on DOM Canvas, supports js functions with return value",
     "license": "BSD-3-Clause",
-    "version": "4.0.0",
+    "version": "1.0.0",
     "exposed-modules": {
         "Main module": [
             "Canvas"

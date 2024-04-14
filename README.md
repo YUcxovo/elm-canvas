@@ -1,6 +1,8 @@
-# joakin/elm-canvas
+# linsyking/elm-canvas & joakin/elm-canvas
 
-** WARNING: THIS IS THE CLONE OF [`joakin/elm-canvas`](https://package.elm-lang.org/packages/joakin/elm-canvas/latest/) @ v5.0.0 MADE FOR CUSTOM USE WITH SOME EXTRA FUNCTIONALITY LIKE GRADIENTS ETC. USE ON YOUR OWN RISK AND PREFER THE ORIGINAL ONE IN ANY CASE. **
+** WARNING: THIS IS THE CLONE OF [`linsyking/elm-canvas`](https://package.elm-lang.org/packages/linsyking/elm-canvas/latest/) @ v4.0.0 MADE FOR CUSTOM USE WITH SOME EXTRA FUNCTIONALITY LIKE TEXTSWAP ETC. USE ON YOUR OWN RISK AND PREFER THE ORIGINAL ONE IN ANY CASE. **
+
+** THE [`linsyking/elm-canvas`](https://package.elm-lang.org/packages/linsyking/elm-canvas/latest/) PACKAGE IS ALSO A CUSTOM VERSION OF [`joakin/elm-canvas`](https://package.elm-lang.org/packages/joakin/elm-canvas/latest/) @ v5.0.0**
 
 This module exposes a nice drawing API that works on top of the the DOM canvas.
 
