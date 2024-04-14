@@ -1,5 +1,6 @@
 module Canvas.Internal.Canvas exposing
-    ( DrawOp(..)
+    ( AutoSwapOp(..)
+    , DrawOp(..)
     , Drawable(..)
     , PathSegment(..)
     , Point
@@ -49,7 +50,14 @@ type Renderable
 
 
 type alias Text =
-    { maxWidth : Maybe Float, point : Point, text : String }
+    { maxWidth : Maybe Float, point : Point, text : String, autoSwap : AutoSwapOp }
+
+
+type AutoSwapOp
+    = Letter { label : String, lineWidth : Float, lineSpace : Float }
+    | Word { label : String, lineWidth : Float, lineSpace : Float }
+    | Manual Float
+    | Oneline
 
 
 type Shape

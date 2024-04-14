@@ -54,7 +54,7 @@ In order to make a complex path, we need to put together a list of `PathSegment`
 -}
 
 import Canvas.Internal.Canvas as C exposing (..)
-import Canvas.Internal.CustomElementJsonApi as CE exposing (Commands, commands)
+import Canvas.Internal.CustomElementJsonApi as CE exposing (Command, Commands, commands)
 import Canvas.Internal.Texture as T
 import Canvas.Texture as Texture exposing (Texture)
 import Html exposing (..)
@@ -570,7 +570,7 @@ text settings point str =
         (Renderable
             { commands = []
             , drawOp = NotSpecified
-            , drawable = DrawableText { maxWidth = Nothing, point = point, text = str }
+            , drawable = DrawableText { maxWidth = Nothing, point = point, text = str, autoSwap = Oneline }
             }
         )
 
@@ -666,7 +666,7 @@ renderDrawable : Drawable -> DrawOp -> List CanvasValue -> Commands -> Commands
 renderDrawable drawable drawOp cvalues cmds =
     case drawable of
         DrawableText txt ->
-            renderText drawOp txt cmds
+            renderText drawOp txt cvalues cmds
 
         DrawableShapes ss ->
             List.foldl renderShape (CE.beginPath :: cmds) ss
@@ -726,8 +726,191 @@ renderLineSegment segment cmds =
             CE.quadraticCurveTo cpx cpy x y :: cmds
 
 
-renderText : DrawOp -> Text -> Commands -> Commands
-renderText drawOp txt cmds =
+renderText : DrawOp -> Text -> List CanvasValue -> Commands -> Commands
+renderText drawOp txt cvalues cmds =
+    case txt.autoSwap of
+        Oneline ->
+            renderSingleText drawOp txt cmds
+
+        Manual x ->
+            renderTextwithNewline drawOp txt x cmds
+
+        Letter { label, lineWidth, lineSpace } ->
+            renderTextSwapwithInput drawOp cvalues True ( label, lineWidth, lineSpace ) txt cmds
+
+        Word { label, lineWidth, lineSpace } ->
+            renderTextSwapwithInput drawOp cvalues False ( label, lineWidth, lineSpace ) txt cmds
+
+
+renderTextSwapwithInput : DrawOp -> List CanvasValue -> Bool -> ( String, Float, Float ) -> Text -> Commands -> Commands
+renderTextSwapwithInput drawOp cvalues isLetter ( label, lWidth, lSpace ) txt cmds =
+    let
+        textVs =
+            List.filter
+                (\value -> value.label == label)
+                cvalues
+
+        textMatricsVs =
+            List.map (\cvalue -> cvalue.value) <|
+                List.filter
+                    (\value -> value.valuetype == "TextMetrics")
+                    textVs
+
+        textStoredVs =
+            List.map (\cvalue -> cvalue.value) <|
+                List.filter
+                    (\value -> value.valuetype == "storeValue")
+                    textVs
+    in
+    renderTextSwap drawOp textMatricsVs textStoredVs isLetter ( label, lWidth, lSpace ) txt cmds
+
+
+renderTextSwap : DrawOp -> List E.Value -> List E.Value -> Bool -> ( String, Float, Float ) -> Text -> Commands -> Commands
+renderTextSwap drawOp textMatricsls storedValuels isLetter ( label, lWidth, lSpace ) txt cmds =
+    let
+        decodeUsage : E.Value -> Result D.Error String
+        decodeUsage singleSV =
+            D.decodeValue (D.field "usage" D.string) singleSV
+
+        textSwapsls =
+            List.filter (\x -> decodeUsage x == Ok "textSwap") storedValuels
+
+        toWordls : String -> List String
+        toWordls str =
+            List.filter (\x -> x /= "") <| List.intersperse " " <| String.split " " str
+
+        txtls =
+            if isLetter then
+                List.map String.fromChar <| String.toList txt.text
+
+            else
+                toWordls txt.text
+    in
+    if List.isEmpty textSwapsls then
+        storeSwapValue txt.text txt.text label
+            :: (List.map (CE.measureText label) <|
+                    txtls
+               )
+            ++ cmds
+
+    else
+        let
+            ( resotxt, resctxt ) =
+                ( D.decodeValue (D.field "originText" D.string) <| Maybe.withDefault E.null <| List.head textSwapsls
+                , D.decodeValue (D.field "changedText" D.string) <| Maybe.withDefault E.null <| List.head textSwapsls
+                )
+        in
+        case ( resotxt, resctxt ) of
+            ( Ok otxt, Ok ctxt ) ->
+                if not (List.isEmpty textMatricsls) then
+                    let
+                        twidthls =
+                            List.filterMap Result.toMaybe <|
+                                List.map (D.decodeValue (D.field "width" D.float)) textMatricsls
+
+                        genNewtxt : Float -> Float -> List Float -> Bool -> String -> String -> String
+                        genNewtxt lwidth swidth mwidthls isLtr ipttxt opttxt =
+                            case mwidthls of
+                                mwidth :: restls ->
+                                    if String.left 1 ipttxt == "\n" then
+                                        let
+                                            ( space, nipttxt ) =
+                                                removeSpace 0 (String.dropLeft 1 ipttxt)
+
+                                            droppedls =
+                                                List.drop space restls
+                                        in
+                                        genNewtxt lwidth 0 droppedls isLtr nipttxt <| opttxt ++ "\n"
+
+                                    else if mwidth >= lwidth then
+                                        opttxt ++ ""
+
+                                    else if mwidth + swidth >= lwidth then
+                                        let
+                                            ( space, nipttxt ) =
+                                                removeSpace 0 ipttxt
+
+                                            droppedls =
+                                                List.drop space mwidthls
+                                        in
+                                        genNewtxt lwidth 0 droppedls isLtr nipttxt <| opttxt ++ "\n"
+
+                                    else
+                                        let
+                                            addtxt =
+                                                if isLtr then
+                                                    String.left 1 ipttxt
+
+                                                else
+                                                    Maybe.withDefault "" <| List.head <| toWordls ipttxt
+
+                                            nipttxt =
+                                                if isLtr then
+                                                    String.dropLeft 1 ipttxt
+
+                                                else
+                                                    String.concat <| List.drop 1 <| toWordls ipttxt
+                                        in
+                                        genNewtxt lwidth (mwidth + swidth) restls isLtr nipttxt <|
+                                            opttxt
+                                                ++ addtxt
+
+                                [] ->
+                                    opttxt
+
+                        realtext =
+                            genNewtxt lWidth 0 twidthls isLetter txt.text ""
+                    in
+                    renderTextwithNewline drawOp { txt | text = realtext } lSpace <|
+                        storeSwapValue otxt realtext label
+                            :: cmds
+
+                else if txt.text == otxt then
+                    renderTextwithNewline drawOp { txt | text = ctxt } lSpace <|
+                        storeSwapValue otxt ctxt label
+                            :: cmds
+
+                else
+                    storeSwapValue txt.text txt.text label
+                        :: (List.map (CE.measureText label) <|
+                                txtls
+                           )
+                        ++ cmds
+
+            _ ->
+                cmds
+
+
+renderTextwithNewline : DrawOp -> Text -> Float -> Commands -> Commands
+renderTextwithNewline drawOp txt lineSpace cmds =
+    Tuple.second <|
+        List.foldl
+            (\t ( ( x, y ), cs ) ->
+                ( ( x, y + lineSpace ), renderSingleText drawOp { txt | text = t, point = ( x, y ) } cs )
+            )
+            ( txt.point, cmds )
+            (String.lines txt.text)
+
+
+removeSpace : Int -> String -> ( Int, String )
+removeSpace count txt =
+    case String.left 1 txt of
+        " " ->
+            removeSpace (count + 1) <|
+                String.dropLeft 1 txt
+
+        _ ->
+            ( count, txt )
+
+
+storeSwapValue : String -> String -> String -> Command
+storeSwapValue originText changedText label =
+    CE.store label <|
+        E.object [ ( "originText", E.string originText ), ( "changedText", E.string changedText ), ( "usage", E.string "textSwap" ) ]
+
+
+renderSingleText : DrawOp -> Text -> Commands -> Commands
+renderSingleText drawOp txt cmds =
     cmds
         |> renderTextDrawOp drawOp txt
 

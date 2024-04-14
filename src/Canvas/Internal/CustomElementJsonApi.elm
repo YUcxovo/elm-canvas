@@ -1,7 +1,7 @@
 module Canvas.Internal.CustomElementJsonApi exposing
     ( Commands, empty
     , fillStyle, strokeStyle
-    , font, textAlign, textBaseline, fillText, strokeText
+    , font, textAlign, textBaseline, fillText, strokeText, measureText
     , fillRect, strokeRect, clearRect
     , beginPath, closePath, FillRule(..), fill, clip, stroke, arc, arcTo, bezierCurveTo, lineTo, moveTo, quadraticCurveTo, rect, circle
     , lineCap, lineDashOffset, lineJoin, lineWidth, miterLimit, setLineDash
@@ -41,7 +41,7 @@ better defaults as time goes by, and make specific tutorials with Elm.
 
 # Text
 
-@docs font, textAlign, textBaseline, fillText, strokeText
+@docs font, textAlign, textBaseline, fillText, strokeText, measureText
 
 
 # Shapes
@@ -719,6 +719,19 @@ fillText text x y maybeMaxWidth =
             fn "fillText" [ string text, float x, float y, float maxWidth ]
 
 
+{-| Returns a object with valuetype `TextMetrics` that contains information about the measured
+text (such as its width, for example)
+
+    empty |> measureText label text
+
+[MDN docs](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/measureText)
+
+-}
+measureText : String -> String -> Command
+measureText label text =
+    fnret "measureText" label "TextMetrics" [ string text ]
+
+
 {-| Connects the last point in the sub-path to the x, y coordinates with a
 straight line (but does not actually draw it). [MDN docs](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineTo)
 
@@ -997,9 +1010,7 @@ drawImage sx sy sw sh dx dy dw dh imageObj =
 
 {- TODO: Should these functions be supported:
    - createImageData
-   - createLinearGradient
    - createPattern
-   - createRadialGradient
    - drawFocusIfNeeded
    - getImageData
    - isPointInPath

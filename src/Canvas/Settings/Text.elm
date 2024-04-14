@@ -1,4 +1,7 @@
-module Canvas.Settings.Text exposing (font, align, TextAlign(..), baseLine, TextBaseLine(..), maxWidth)
+module Canvas.Settings.Text exposing
+    ( font, align, TextAlign(..), baseLine, TextBaseLine(..), maxWidth
+    , autoSwapbyLetter, autoSwapbyWord, swapManually
+    )
 
 {-|
 
@@ -18,6 +21,7 @@ You can apply the following styling settings to text specifically. They will do
 nothing if you apply them to other renderables, like `shapes`.
 
 @docs font, align, TextAlign, baseLine, TextBaseLine, maxWidth
+@docs autoSwapbyLetter, autoSwapbyWord, swapManually
 
 -}
 
@@ -114,6 +118,80 @@ textBaseLineToString baseLineSetting =
 
         Bottom ->
             "bottom"
+
+
+{-| Specify the autoswap settings as swap by letters mode to use when rendering text.
+You can also use `\n` to swap line manually. spaces at the beginning of sentences will be omitted.
+Use `\t` if you want to add spaces in this state.
+
+  - `label`
+      - Clare a label for the usage of swap text. Note that don't use the same label
+        as another element. Do not use `""` as a label.
+  - `lineWidth`
+      - The width of a line in pixel.
+  - `lineSpace`
+      - The space between two baselines in pixel.
+
+-}
+autoSwapbyLetter : { label : String, lineWidth : Float, lineSpace : Float } -> Setting
+autoSwapbyLetter { label, lineWidth, lineSpace } =
+    SettingUpdateDrawable
+        (\drawable ->
+            case drawable of
+                DrawableText text ->
+                    DrawableText { text | autoSwap = Letter <| { label = label, lineWidth = lineWidth, lineSpace = lineSpace } }
+
+                _ ->
+                    drawable
+        )
+
+
+{-| Specify the autoswap settings as swap by words mode to use when rendering text.
+You can also use `\n` to swap line manually. spaces at the beginning of sentences will be omitted.
+Use `\t` if you want to add spaces in this state.
+If the linewidth shouldn't be less than the width of any word.
+
+  - `label`
+      - Clare a label for the usage of swap text. Note that don't use the same label
+        as another element. Do not use `""` as a label.
+  - `lineWidth`
+      - The width of a line in pixel.
+  - `lineSpace`
+      - The space between two baselines in pixel.
+
+-}
+autoSwapbyWord : { label : String, lineWidth : Float, lineSpace : Float } -> Setting
+autoSwapbyWord { label, lineWidth, lineSpace } =
+    SettingUpdateDrawable
+        (\drawable ->
+            case drawable of
+                DrawableText text ->
+                    DrawableText { text | autoSwap = Word <| { label = label, lineWidth = lineWidth, lineSpace = lineSpace } }
+
+                _ ->
+                    drawable
+        )
+
+
+{-| You can add `\n` in sentence to swap line when rendering text.
+Spaces at the beginning of sentences will be omitted.
+Use `\t` if you want to add spaces in this state.
+
+  - `lineWidth`
+      - The width of a line in pixel.
+
+-}
+swapManually : Float -> Setting
+swapManually lineSpace =
+    SettingUpdateDrawable
+        (\drawable ->
+            case drawable of
+                DrawableText text ->
+                    DrawableText { text | autoSwap = Manual lineSpace }
+
+                _ ->
+                    drawable
+        )
 
 
 {-| Specify the font size and family to use when rendering text.
