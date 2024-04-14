@@ -1,5 +1,6 @@
 module Canvas exposing
-    ( toHtml, toHtmlWith
+    ( CanvasValue
+    , toHtml, toHtmlWith
     , Renderable, Point
     , clear, shapes, text, texture, group, empty
     , Shape
@@ -12,6 +13,11 @@ canvas.
 
 See instructions in the main page of the package for installation, as it
 requires the `elm-canvas` web component to work.
+
+
+# Canvas value
+
+@docs CanvasValue
 
 
 # Usage in HTML
@@ -56,6 +62,30 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (on)
 import Html.Keyed as Keyed
 import Json.Decode as D
+import Json.Encode as E
+
+
+
+-- Canvas Value
+
+
+{-| The data type for return values needed from main elm code.
+
+label is for identify the target, every time you use a js function with return
+value or store some data, you need a label to get it in next frame.
+
+valuetype is the data type of the return value.
+
+**Note**: the valuetype of a stored data is **storeValue**
+
+value is the value you need.
+
+-}
+type alias CanvasValue =
+    { label : String
+    , valuetype : String
+    , value : E.Value
+    }
 
 
 
@@ -65,6 +95,7 @@ import Json.Decode as D
 {-| Create a Html element that you can use in your view.
 
     Canvas.toHtml ( width, height )
+        ( model.canvasReturnValue, Canvas )
         [ style "display" "block", onClick CanvasClick ]
         [ shapes [ fill Color.white ] [ rect ( 0, 0 ) w h ]
         , text
@@ -74,7 +105,9 @@ import Json.Decode as D
         ]
 
 `toHtml` is almost like creating other Html elements. We need to pass `(width,
-height)` in pixels, a list of `Html.Attribute`, and finally _instead_ of a list
+height)` in pixels, the `CanvasValue` list that receive from canvas which might be stored
+in your model, the way you change the canvas value to a msg which you defined
+in the Msg part, a list of `Html.Attribute`, and finally _instead_ of a list
 of html elements, we pass a `List Renderable`. A `Renderable` is a thing that
 the canvas knows how to render. Read on for more information 👇.
 
@@ -87,12 +120,13 @@ display](https://developer.mozilla.org/es/docs/Web/CSS/display) for possible
 display values.
 
 -}
-toHtml : ( Int, Int ) -> List (Attribute msg) -> List Renderable -> Html msg
-toHtml ( w, h ) attrs entities =
+toHtml : ( Int, Int ) -> ( List CanvasValue, CanvasValue -> msg ) -> List (Attribute msg) -> List Renderable -> Html msg
+toHtml ( w, h ) ( retvalues, toMsg ) attrs entities =
     toHtmlWith
         { width = w
         , height = h
         , textures = []
+        , returnValues = ( retvalues, toMsg )
         }
         attrs
         entities
@@ -105,6 +139,7 @@ textures.
         { width = 500
         , height = 500
         , textures = [ Texture.loadImageUrl "./assets/sprite.png" TextureLoaded ]
+        , returnValues = ( model.canvasReturnValue, Canvas )
         }
         [ style "display" "block", onClick CanvasClick ]
         [ shapes [ fill Color.white ] [ rect ( 0, 0 ) w h ]
@@ -129,13 +164,29 @@ toHtmlWith :
     { width : Int
     , height : Int
     , textures : List (Texture.Source msg)
+    , returnValues : ( List CanvasValue, CanvasValue -> msg )
     }
     -> List (Attribute msg)
     -> List Renderable
     -> Html msg
 toHtmlWith options attrs entities =
+    let
+        ( retvalues, valuetoMsg ) =
+            options.returnValues
+
+        returnValueDecoder : (CanvasValue -> msg) -> D.Decoder msg
+        returnValueDecoder toMsg =
+            D.map (\canvasReturnValue -> toMsg canvasReturnValue) <|
+                D.map3 CanvasValue
+                    (D.at [ "detail", "label" ] D.string)
+                    (D.at [ "detail", "valuetype" ] D.string)
+                    (D.at [ "detail", "value" ] D.value)
+
+        eventListener =
+            on "canvasReturnValue" (returnValueDecoder valuetoMsg)
+    in
     Keyed.node "elm-canvas"
-        (commands (render entities) :: height options.height :: width options.width :: attrs)
+        (commands (render entities retvalues) :: height options.height :: width options.width :: eventListener :: attrs)
         (( "__canvas", cnvs )
             :: List.map renderTextureSource options.textures
         )
@@ -597,22 +648,22 @@ empty =
 -- Rendering internals
 
 
-render : List Renderable -> Commands
-render entities =
-    List.foldl (renderOne NotSpecified) CE.empty entities
+render : List Renderable -> List CanvasValue -> Commands
+render entities cvalues =
+    List.foldl (renderOne NotSpecified cvalues) CE.empty entities
 
 
-renderOne : DrawOp -> Renderable -> Commands -> Commands
-renderOne parentDrawOp (Renderable { commands, drawable, drawOp }) cmds =
+renderOne : DrawOp -> List CanvasValue -> Renderable -> Commands -> Commands
+renderOne parentDrawOp cvalues (Renderable { commands, drawable, drawOp }) cmds =
     cmds
         |> (::) CE.save
         |> (++) commands
-        |> renderDrawable drawable (mergeDrawOp parentDrawOp drawOp)
+        |> renderDrawable drawable (mergeDrawOp parentDrawOp drawOp) cvalues
         |> (::) CE.restore
 
 
-renderDrawable : Drawable -> DrawOp -> Commands -> Commands
-renderDrawable drawable drawOp cmds =
+renderDrawable : Drawable -> DrawOp -> List CanvasValue -> Commands -> Commands
+renderDrawable drawable drawOp cvalues cmds =
     case drawable of
         DrawableText txt ->
             renderText drawOp txt cmds
@@ -628,7 +679,7 @@ renderDrawable drawable drawOp cmds =
             renderClear p w h cmds
 
         DrawableGroup renderables ->
-            renderGroup drawOp renderables cmds
+            renderGroup drawOp cvalues renderables cmds
 
         DrawableEmpty ->
             cmds
@@ -799,8 +850,8 @@ renderClear ( x, y ) w h cmds =
     CE.clearRect x y w h :: cmds
 
 
-renderGroup : DrawOp -> List Renderable -> Commands -> Commands
-renderGroup drawOp renderables cmds =
+renderGroup : DrawOp -> List CanvasValue -> List Renderable -> Commands -> Commands
+renderGroup drawOp cvalues renderables cmds =
     let
         cmdsWithDraw =
             case drawOp of
@@ -816,4 +867,4 @@ renderGroup drawOp renderables cmds =
                 FillAndStroke fc sc ->
                     CE.fillStyleEx fc :: CE.strokeStyleEx sc :: cmds
     in
-    List.foldl (renderOne drawOp) cmdsWithDraw renderables
+    List.foldl (renderOne drawOp cvalues) cmdsWithDraw renderables

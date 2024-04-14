@@ -10,6 +10,7 @@ module Canvas.Internal.CustomElementJsonApi exposing
     , globalAlpha, globalCompositeOperation, globalImageSmoothingEnabled, save, restore
     , rotate, scale, translate, transform, setTransform
     , drawImage
+    , store
     , Command, Style(..), commands, fillStyleEx, roundRect, strokeStyleEx
     )
 
@@ -81,6 +82,11 @@ better defaults as time goes by, and make specific tutorials with Elm.
 # Drawing images
 
 @docs drawImage
+
+
+# Store values
+
+@docs store
 
 -}
 
@@ -1017,6 +1023,16 @@ commands list =
         |> property "cmds"
 
 
+{-| Used when storing some data to deal with in next update.
+
+label is for checking the data when dealing
+
+-}
+store : String -> Value -> Command
+store label value =
+    Encode.object [ ( "type", string "store" ), ( "label", string label ), ( "value", value ) ]
+
+
 field : String -> Command -> Command
 field name value =
     Encode.object [ ( "type", string "field" ), ( "name", string name ), ( "value", value ) ]
@@ -1025,6 +1041,11 @@ field name value =
 fn : String -> List Command -> Command
 fn name args =
     Encode.object [ ( "type", string "function" ), ( "name", string name ), ( "args", Encode.list identity args ) ]
+
+
+fnret : String -> String -> String -> List Command -> Command
+fnret name label valuetype args =
+    Encode.object [ ( "type", string "function_need_return" ), ( "name", string name ), ( "label", string label ), ( "valuetype", string valuetype ), ( "args", Encode.list identity args ) ]
 
 
 var : String -> Command -> List Command -> Command

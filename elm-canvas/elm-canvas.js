@@ -74,9 +74,24 @@ if (typeof window !== "undefined") {
           if (!this.mounted) return;
           // Iterate over the commands in reverse order as that's how the Elm side
           // builds them with linked lists
+          this.dispatchEvent(this.createvent("", "clear", "")); // send an event with valuetype: clear before every rendering
           for (let i = this.commands.length - 1; i >= 0; i--) {
             this.execCommand(this.commands[i]);
           }
+        }
+
+        createvent(lb, valtype, val) {
+          let evt = new CustomEvent("canvasReturnValue", {
+            bubbles: true,
+            cancelable: true,
+            detail: {
+              label: lb,
+              valuetype: valtype,
+              value: val,
+            },
+          }
+          );
+          return evt;
         }
 
         execCommand(cmd) {
@@ -85,18 +100,23 @@ if (typeof window !== "undefined") {
           } else if (cmd.type === "field") {
             this.context[cmd.name] = cmd.value;
           } else if (cmd.type === "variable") {
-            (function(context) {
+            (function (context) {
               if (cmd.init.type === "function") {
                 const localVar = context[cmd.init.name](...cmd.init.args);
                 const modifiers = cmd.modifiers;
                 for (let i = 0; i < modifiers.length; i++) {
-                    if (modifiers[i].type === "function") {
-                      localVar[modifiers[i].name](...modifiers[i].args);
-                    }
+                  if (modifiers[i].type === "function") {
+                    localVar[modifiers[i].name](...modifiers[i].args);
+                  }
                 }
                 context[cmd.field] = localVar;
               }
             })(this.context); // Closure
+          } else if (cmd.type === "function_need_return") {
+            const returnValue = this.context[cmd.name](...cmd.args);
+            this.dispatchEvent(this.createvent(cmd.label, cmd.valuetype, returnValue));
+          } else if (cmd.type === "store") {
+            this.dispatchEvent(this.createvent(cmd.label, "storeValue", cmd.value)); // the valuetype of stored data is storeValue
           }
         }
       }
