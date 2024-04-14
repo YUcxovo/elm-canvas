@@ -1,6 +1,6 @@
 {
     "type": "package",
-    "name": "YUcuxo/elm-canvas",
+    "name": "YUcxovo/elm-canvas",
     "summary": "2D drawing API based on DOM Canvas, supports js functions with return value",
     "license": "BSD-3-Clause",
     "version": "1.0.0",
